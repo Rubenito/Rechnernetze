@@ -19,8 +19,7 @@
 #include <netdb.h>
 #include <time.h>
 
-#define BILLION  1000000000L
-#define MAX_BUFFER_LENGTH 100
+#define BUFSIZE 4
 
 
 //Unpack le data
@@ -32,6 +31,21 @@ void unpackData(unsigned char *buffer, unsigned int *a, unsigned int *b) {
 	//Der b
 	*b = (buffer[2] << 8 )|buffer[3];
 }
+
+//Pack that shit back
+int packData(unsigned char *buffer, unsigned int a, unsigned int b) {
+
+	//Convert number a
+	buffer[0] = a>>8;
+	buffer[1] = a % 256;
+
+	//Convert number
+	buffer[2] = b>>8;
+	buffer[3] = b % 256;	
+
+    return 0;
+}
+
 
 int getGCD(int a, int b) {
 	int rest;
@@ -74,7 +88,7 @@ int main(int argc, char *argv[])
 	//Build hints
 	memset(&hints, 0, sizeof hints); // make sure the struct is empty
 	hints.ai_family = AF_UNSPEC;     // don't care IPv4 or IPv6
-	hints.ai_socktype = SOCK_STREAM; // TCP stream sockets
+	hints.ai_socktype = SOCK_DGRAM; // UDP stream sockets
 	hints.ai_flags = AI_PASSIVE; 	 // use my IP
 
 	//Get res
@@ -93,25 +107,56 @@ int main(int argc, char *argv[])
 	listen(sockfd, 1);
 
 	//Accept connections
-    unsigned char buffer[4];
-	//Build necessary structs
-	struct timespec requestStart, requestEnd;
+    unsigned char buf[BUFSIZE]; /* message buf */
 
+    //Structure to memorize adress of calling client
+    struct sockaddr_in clientaddr; /* client addr */
+    int clientlen = sizeof(clientaddr); /*size of address struct*/
+    char *hostaddrp; /* dotted decimal host addr string */
 	while(1) {
-		int addr_size = sizeof(their_addr);
-		int new_fd = accept(sockfd, (struct sockaddr *)&their_addr, &addr_size);
-		if(new_fd == -1) {
-			continue;
-		}
-		printf("Read in bytes: %d\n",(int) recv(new_fd, buffer, 32, 0));
-		unpackData(buffer, &a,&b);
-		printf("a: %d b: %d\n",a,b);
-		printf("The GCT is %d\n",getGCD(a,b));
 
-		double time_before = requestStart.tv_sec+(double)requestStart.tv_nsec/(double)BILLION;
-		double time_after = requestEnd.tv_sec+(double)requestEnd.tv_nsec/(double)BILLION;
+        /*
+        * recvfrom: receive a UDP datagram from a client
+        */
+        bzero(buf, BUFSIZE);
+        if(recvfrom(sockfd, buf, BUFSIZE, 0,
+		    (struct sockaddr *) &clientaddr, &clientlen)<0){
+            perror("Error in Recvfrom: ");
+        }
 
-		printf("Time before receive:%lf \tTime after receive:%lf\n",time_before,time_after);
+        /* 
+        * gethostbyaddr: determine who sent the datagram
+        */
+        struct hostent *hostp = gethostbyaddr((const char *)&clientaddr.sin_addr.s_addr, 
+		                        sizeof(clientaddr.sin_addr.s_addr), AF_INET);
+        
+        if (hostp == NULL) {
+            perror("ERROR on gethostbyaddr");
+        }
+
+        /*
+        * Convert host adress to dotted string
+        */
+        hostaddrp = inet_ntoa(clientaddr.sin_addr);
+        if (hostaddrp == NULL) {
+            perror("ERROR on inet_ntoa\n");
+        }
+
+        /*
+        * Give out sender
+        */
+        printf("server received datagram from %s (%s)\n", 
+	        hostp->h_name, hostaddrp);
+
+        /*
+        * unpack data and print out result  
+        */
+		unpackData(buf, &a,&b);
+		a = getGCD(a,b);
+        packData(a,0);
+
+        sendto(sockfd, buffer, sizeof(char)*BUFSIZE, 0, (struct sockaddr*) &clientaddr, sizeof(clientaddr));        
+
 	}
 
     /* ******************************************************************
