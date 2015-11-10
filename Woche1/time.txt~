@@ -1,0 +1,35 @@
+MESSUNG:
+
+TCP/UDP server                                                                                                                
+                                                                                                                              
+Received UDP data from 127.0.0.1                                                                                              
+The data is 4 bytes long                                                                                                      
+Received 12 and 11. GCD is 1                                                                                                  
+
+-------------------------------------------
+
+Datagram socket client example
+Time before send:1446544395.833535      Time after send:1446544395.833582
+
+-------------------------------------------
+                                                                                                                              
+New connection from 127.0.0.1 on socket 5 established                                                                         
+                                                                                                                              
+Received TCP data from 127.0.0.1                                                                                              
+The data is 4 bytes long                                                                                                      
+Received 22 and 23. GCD is 1                                                                                                  
+                                                                                                                              
+Socket 5 hung up  
+
+--------------------------------------------
+
+Streaming socket client example
+
+Time before send:1446544436.063265      Time after send:1446544436.063280
+
+
+
+ANTWORT:
+
+Beim datagram service wird vorher keine Verbindung aufgebaut, dass heißt, es gibt höhere Kosten per gesendetem Datenpaket. Das kommt durch den zusätzlichen Aufwand durch Wegfindung und den komplexeren Header. 
+So lässt sich die leicht höhere Zeit beim Senden mit UDP erklären.
