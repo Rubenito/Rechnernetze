@@ -11,7 +11,7 @@
 #include <time.h>
 
 #define BUFSIZE 8
-
+#define RANDSIZE 30
 /**
 * PRIMITIVES CONCEARNING NETWORK COMMUNICATION
 */
@@ -69,7 +69,7 @@ int buildSocket(char *argv[], int argc) {
 }
 
 //Pack data to avoid LE vs. BE conflict
-int packData(unsigned char *buffer, char* command,int a, int b) {
+int packData(unsigned char *buffer, char* command,unsigned int a, unsigned int b) {
 
 	//Convert number a
 	buffer[0] = command[0];
@@ -115,10 +115,10 @@ int sendMessage(unsigned char* buffer){
 int receiveMessage(unsigned char* buffer){
 	bzero(buffer, BUFSIZE);
 	int len = sizeof(their_addr);
-	if((recvfrom(sockfd, buffer, BUFSIZE, 0,
+	if((recvfrom(sockfd, buffer, sizeof(char)*BUFSIZE, 0,
 		(struct sockaddr *) &their_addr, &len))<0){
 		perror("Error in Recvfrom: ");
-	}
+	} 
 }
 
 /**
@@ -142,13 +142,43 @@ int set(int key, int value){
 }
 
 //Get element from Hashtable
-int get(int key){
+int get(int key, int* error){
+    //Build buffer and initialize it 
+    unsigned char buffer[BUFSIZE];
+    packData(buffer,"GET",key,0);
+
+    //Send that data to server
+    sendMessage(buffer);
+
+    //Receive awnser
+    receiveMessage(buffer);
+
+    //Unpack data
+    char command[4];
+    int a,b;
+    unpackData(buffer,command,&a,&b);
     
+    //Check if problem rann correctly
+    *error = buffer[0] == 'V';    
+
+    //Return if methof ran successful
+    return b;
 }
 
 //Remove element from Hashtable
 int removeElement(int key){
+    //Build buffer and initialize it 
+    unsigned char buffer[BUFSIZE];
+    packData(buffer,"DEL",key,0);
 
+    //Send that data to server
+    sendMessage(buffer);
+
+    //Receive awnser
+    receiveMessage(buffer);
+
+    //Return if methof ran successful
+    return (buffer[0] =='O');
 }
 
 
@@ -158,8 +188,52 @@ int main(int argc, char *argv[])
 
     //build sockets
     buildSocket(argv,argc);
-
-    set(3,5);
+    
+    //Build random number generator
+    srand(time(NULL));
+    
+    //Build arrays with random keys and values
+    int keys[RANDSIZE];
+    int values[RANDSIZE];
+    int i;
+    for(i = 0; i < RANDSIZE; i++) {
+        keys[i] = (rand()%65536);
+        values[i] = (rand()%65536);
+    }
+   
+    for(i = 0; i < RANDSIZE; i++) {
+        if(set(keys[i],values[i])){
+            printf("Successfully set <%d,%d>\n",keys[i],values[i]);
+        }
+    }
+    
+    int error;
+    int value;
+    for(i = 0; i < RANDSIZE; i++) {
+        value = get(keys[i],&error);
+        if(error == 1) {
+            printf("Successfully got element with value:%u\n",value);
+        }else{
+            printf("No element with key %u\n",keys[i]);
+        }
+    }
+    
+    
+   for(i = 0; i < RANDSIZE; i++) {
+        if(removeElement(keys[i])){
+            printf("Successfully removed key value pait with key:%d\n",keys[i]);
+        }
+    }
+    
+    for(i = 0; i < RANDSIZE; i++) {
+        value = get(keys[i],&error);
+        if(error == 1) {
+            printf("Successfully got element with value:%u\n",value);
+        }else{
+            printf("No element with key %u\n",keys[i]);
+        }
+    }
+    
 
     //Close socket
 	close(sockfd); 

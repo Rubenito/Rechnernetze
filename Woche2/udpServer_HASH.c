@@ -20,6 +20,16 @@
 #include <time.h>
 
 #define BUFSIZE 8
+#define HASHSIZE 256
+
+//Build struct to store elements
+typedef struct element{
+	unsigned int key;
+	unsigned int value;
+	struct element* next;
+}element;
+
+element* hashTable[HASHSIZE];
 
 //Give out buffer
 int printBuffer(unsigned char* buffer) {
@@ -57,26 +67,90 @@ void unpackData(unsigned char *buffer,char* command,unsigned int *a, unsigned in
 
 	//Le key
 	*a = (buffer[4] << 8 )|buffer[5]; 
-	
+
 	//Der value
 	*b = (buffer[6] << 8 )|buffer[7];
 }
 
 //Parse input
 int parse(unsigned char* buffer){
-	int a,b;
+	unsigned int a,b;
 	char command[4];
+	char result[4];
 	unpackData(buffer,command,&a,&b);
-
+	printf("a: %u, b: %u\n",a,b);
 	switch (command[0]) {
-		case 'S': set(a,b);break;
-		case 'G': get(a);break;
-		case 'D': del(a);break;
-		default: sendError();break;   
+		case 'S': set(a,b,result);break;
+		case 'G': get(a,&b,result);break;
+		case 'D': del(a,result);break;   
 	}
+	printf("Set result to:%s\n",result);
+	packData(buffer,result,a,b);
 }
 
-//
+/**
+* Hashtable functions
+*/
+//Save key-value pair
+
+//Get Hash
+int toHash(unsigned int value) {
+	return value%HASHSIZE;
+}
+
+int set(unsigned int key, unsigned int value,char* result)  {
+	printf("Setting <%d,%d>\n",key,value);
+	
+	int position = toHash(key);
+	element *toAdd = calloc(1,sizeof(element));
+	toAdd->key = key;
+	toAdd->value = value;
+	if(hashTable[position] != NULL) {
+		toAdd->next = hashTable[position];
+	}
+	hashTable[position] = toAdd;
+	strcpy(result,"OK!");
+} 
+
+//Get value for key
+int get(int key, int* value,char*result) {
+	printf("Setting the value for key: %d\n",key);
+
+	int position = toHash(key);
+	element* query = hashTable[position];
+	while(query != NULL && query->key != key) {
+		query = query->next;
+	}
+	if(query == NULL){
+		strcpy(result,"NOF");
+		return -1;
+	}else {
+		*value = query->value;
+		strcpy(result,"VAL");
+		return 1;
+	}
+
+} 
+
+//Delete key value pair with given key
+int del(int key,char* result) {
+	printf("Deleting key-value pair for key: %d\n",key);
+	int position = toHash(key);
+	element* query = hashTable[position];
+	element* before;
+	while(query != NULL && query->key != key){
+		before = query;
+		query = query->next;
+	}
+	if(query == NULL) {
+		strcpy(result,"ERR");
+		return -1;
+	}else{
+		strcpy(result,"OK!");
+		before->next = query->next;
+		free(query);
+	}
+}
 
 int main(int argc, char *argv[])
 {
@@ -122,12 +196,12 @@ int main(int argc, char *argv[])
     char *hostaddrp; /* dotted decimal host addr string */
 
 	while(1) {
-
+		printf("\n");
         /*
         * recvfrom: receive a UDP datagram from a client
         */
         bzero(buf, BUFSIZE);
-        if(recvfrom(sockfd, buf, BUFSIZE, 0,
+        if(recvfrom(sockfd, buf, BUFSIZE*sizeof(char), 0,
 		    (struct sockaddr *) &clientaddr, &clientlen)<0){
             perror("Error in Recvfrom: ");
         }
@@ -160,12 +234,17 @@ int main(int argc, char *argv[])
 		//Show buffer
 		printBuffer(buf);
 
+		parse(buf);
+
+		printBuffer(buf);
 
 		/*
 		* Send Information back
 		*/
         if(sendto(sockfd, buf, sizeof(char)*BUFSIZE, 0, (struct sockaddr*) &clientaddr, sizeof(clientaddr)) < 0) {
 			perror("Error Sending GGT back\n");
+		}else {
+			printf("Send response\n");
 		}        
 		
 	}
